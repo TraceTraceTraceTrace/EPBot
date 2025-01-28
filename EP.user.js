@@ -3,6 +3,8 @@
 // @namespace    http://tampermonkey.net/
 // @version      2024-12-13
 // @description  highlight sku and press EP
+// @updateURL    https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/5ca1a69776082d4579be55b47e58a84d4aead065/EP.user.js
+// @downloadURL  https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/5ca1a69776082d4579be55b47e58a84d4aead065/EP.user.js
 // @author       You
 // @include      @https://productstation.microcenter.com
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=microcenter.com
