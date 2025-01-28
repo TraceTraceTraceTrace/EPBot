@@ -13,12 +13,8 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
-
 client = discord.Client(intents=intents)
-
 tree = app_commands.CommandTree(client)
-
-#test awda
 
 
 
@@ -26,13 +22,21 @@ tree = app_commands.CommandTree(client)
     name="ep",
     description="Check EP from SKU"
 )
-@app_commands.describe(sku = "Input 6 digit SKU")
+@app_commands.describe(sku = "Enter SKU")
 async def ep(interaction: discord.Interaction, sku: str):
-    await interaction.response.send_message(f"The SKU is: {sku}")
+    if not (sku.isdigit() and len(sku) == 6):
+        await interaction.response.send_message(f"Please enter a valid SKU") #, ephemeral=True)
+    else:
+        await interaction.response.send_message(f"Valid SKU: {sku}") #, ephemeral=True)
 
 
 #below code is from this: https://stackoverflow.com/questions/74389045/how-do-i-run-a-websocket-and-discord-py-bot-concurrently
 #i think this is how we can run the discord bot code and websocket code in a single file
+
+
+#websockets might be a no go because of security policies within broswers. or i might need to make it a secure connection so that its allowed
+#async def handle_connection(websocket, path):
+#    print("Client connected")
 
 #async def response(websocket, path):
 #    message = await websocket.recv()
@@ -40,15 +44,15 @@ async def ep(interaction: discord.Interaction, sku: str):
 
 # --- start ---
 #async def serve():
-#    print('running websockets ws://localhost:8000')
-#    server = await websockets.serve(response, 'localhost', 8000)
+#    print('running websockets ws://localhost:8123')
+#    server = await websockets.serve(response, 'localhost', 8123)
 #    await server.wait_closed()
 
 
 @client.event
 async def on_ready():
     #tree.sync is only needed when adding or modifying slash commands. once the command is created, you can comment it out.
-    await tree.sync()
+    #await tree.sync()
     print(f'Logged in as {client.user}')
 
 
