@@ -32,7 +32,7 @@ async def ep(interaction: discord.Interaction, sku: str):
 
 
 #below code is from this: https://stackoverflow.com/questions/74389045/how-do-i-run-a-websocket-and-discord-py-bot-concurrently
-#i think this is how we can run the discord bot code and websocket code in a single
+#i think this is how we can run the discord bot code and websocket code in a single file
 
 #async def response(websocket, path):
 #    message = await websocket.recv()
