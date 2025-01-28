@@ -14,8 +14,9 @@
 /*
 Juan, this is the script that is currently on the computers at work that lets you check EP.
 we just need to take the GM.xmlHttpRequest() function from this code and add the websocket code and stuff
-also, the code is terrible. it just reads the responses html as a string. we should load it as a DOM object and use an xpath to parse out just the EP price.
+also, the code is terrible. it just reads the responses html as a string. we should load it as a DOM object and use an xPath to parse out just the EP price.
 the unfortunate part about this code is that we can't really test if it actually works unless we run it on the computers at work
+I did save the HAR file for the response though which i think we can maybe use to test this code without being at work
 */
 
 
