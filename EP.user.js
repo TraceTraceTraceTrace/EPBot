@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         EP
 // @namespace    http://tampermonkey.net/
-// @version      2024-12-13
+// @version      0.9
 // @description  highlight sku and press EP
 // @updateURL    https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/5ca1a69776082d4579be55b47e58a84d4aead065/EP.user.js
 // @downloadURL  https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/5ca1a69776082d4579be55b47e58a84d4aead065/EP.user.js
