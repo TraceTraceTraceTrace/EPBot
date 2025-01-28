@@ -1,6 +1,7 @@
 import asyncio
 import websockets
 import discord
+from discord.ext import commands
 from discord import app_commands
 import os
 from dotenv import load_dotenv
@@ -25,8 +26,9 @@ tree = app_commands.CommandTree(client)
     name="ep",
     description="Check EP from SKU"
 )
-async def first_command(interaction):
-    await interaction.response.send_message("$1,000.00")
+@app_commands.describe(sku = "Input 6 digit SKU")
+async def ep(interaction: discord.Interaction, sku: str):
+    await interaction.response.send_message(f"The SKU is: {sku}")
 
 
 #below code is from this: https://stackoverflow.com/questions/74389045/how-do-i-run-a-websocket-and-discord-py-bot-concurrently
@@ -46,7 +48,7 @@ async def first_command(interaction):
 @client.event
 async def on_ready():
     #tree.sync is only needed when adding or modifying slash commands. once the command is created, you can comment it out.
-    #await tree.sync()
+    await tree.sync()
     print(f'Logged in as {client.user}')
 
 
