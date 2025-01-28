@@ -18,7 +18,7 @@ client = discord.Client(intents=intents)
 
 tree = app_commands.CommandTree(client)
 
-#test
+#test awda
 
 
 
