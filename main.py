@@ -8,17 +8,20 @@ from dotenv import load_dotenv
 
 # Loads the Discord bot token from a .env file
 load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN')
+TOKEN = os.getenv('TOKEN')
+AUTHORID = int(os.getenv('AUTHOR_ID'))
 
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-
 # Juan, what we gotta do is this:
 # if websocket server receives price and there is active interaction (someone is waiting for price check), edit the interaction message with the price
 # if websocket server receives price but there is no active interaction, ignore. i think this is what will happen when there are multiple clients for redundancy.
+
+# need to store all clients in list or something then interate through list when sending messages to client
+# otherwise, client variable only points to most recently connected client
 
 # global variables because... i dont feel like typing why, they're important though
 active_websocket = None
@@ -29,7 +32,12 @@ active_interaction = None
 )
 @app_commands.describe(message="What do you want me to say?")
 async def say(interaction: discord.Interaction, message: str):
-    await interaction.response.send_message(message)
+    #await interaction.response.send_message(message) use below to stay anon. i dont wanna get fired for this please
+    if interaction.user.id == AUTHORID:
+        await interaction.channel.send(message)
+        await interaction.response.send_message("Message sent", ephemeral = True)
+    else:
+        await interaction.response.send_message("You're not sigma enough to use this command. ", ephemeral = True)
 
 @tree.command(
     name="ep",
