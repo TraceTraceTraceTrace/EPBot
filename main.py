@@ -15,7 +15,21 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
+
+# Juan, what we gotta do is this:
+# if websocket server receives price and there is active interaction (someone is waiting for price check), edit the interaction message with the price
+# if websocket server receives price but there is no active interaction, ignore. i think this is what will happen when there are multiple clients for redundancy.
+
+# global variables because... i dont feel like typing why, they're important though
 active_websocket = None
+active_interaction = None
+
+@tree.command(
+    name="say"
+)
+@app_commands.describe(message="What do you want me to say?")
+async def say(interaction: discord.Interaction, message: str):
+    await interaction.response.send_message(message)
 
 @tree.command(
     name="ep",
@@ -23,6 +37,8 @@ active_websocket = None
 )
 @app_commands.describe(sku="Enter SKU")
 async def ep(interaction: discord.Interaction, sku: str):
+    global active_interaction
+    active_interaction = interaction
     if not (sku.isdigit() and len(sku) == 6):
         await interaction.response.send_message(f"Please enter a valid SKU")
     else:
@@ -34,30 +50,30 @@ async def ep(interaction: discord.Interaction, sku: str):
                 print(f"Sent SKU: {sku} to the WebSocket client.")
             except Exception as error:
                 print(f"Error sending SKU: {error}")
-        await interaction.response.edit_message("$1000")
 
-# This is the WebSocket response handler.
 async def response(websocket):
     global active_websocket
     active_websocket = websocket  # Store the connection globally
     try:
         print("WebSocket connected")
         while True:
-            message = await websocket.recv()  # Receive the message from the client
-            print(f"Received message: {message}")
-            await websocket.send(f"Message received: {message}")  # Send response back to the client
+            message = await websocket.recv() # Receive the message from the client
+            print("MESSAGE RECEIVED: "+message)
+            if active_interaction:
+                await active_interaction.edit_original_response(content=message)
+                
     except websockets.exceptions.ConnectionClosed:
         print("Connection closed.")
-    
-# WebSocket server function to run the WebSocket server on localhost
+
 async def serve():
-    print('Running WebSocket server at ws://localhost:8765')
-    server = await websockets.serve(response, 'localhost', 8765)  # Pass the correct handler function
-    await server.wait_closed()  # Wait for the server to close
+    print('Running WebSocket server at ws://localhost:1234')
+    server = await websockets.serve(response, 'localhost', 1234)
+    await server.wait_closed()
 
 # Main function that runs both the Discord bot and the WebSocket server concurrently
 async def main():
-    websocket_task = asyncio.create_task(serve())  # Start WebSocket server
+    #websocket_task = asyncio.create_task(serve())  # Start WebSocket server
+    asyncio.create_task(serve())  # Start WebSocket server
     await client.start(TOKEN)  # Run the Discord bot (this will block until it exits)
 
 if __name__ == "__main__":
