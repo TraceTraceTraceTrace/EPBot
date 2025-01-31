@@ -82,7 +82,6 @@ I did save the HAR file for the response though which i think we can maybe use t
                     alert(`Retail Price: ${retailPrice}\nEmployee Price: ${employeePrice}\nDiscount: ${Math.round((1-(employeePrice/retailPrice))*100) || 0}% off`)
                 },
                 onerror: function(error) {
-                    // Handle errors here
                     console.error("Error:", error);
                 },
                 credentials: "include"

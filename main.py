@@ -1,7 +1,6 @@
 import asyncio
 import websockets
 import discord
-from discord.ext import commands
 from discord import app_commands
 import os
 from dotenv import load_dotenv
@@ -16,7 +15,7 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# Juan, what we gotta do is this:
+# what we gotta do is this:
 # if websocket server receives price and there is active interaction (someone is waiting for price check), edit the interaction message with the price
 # if websocket server receives price but there is no active interaction, ignore. i think this is what will happen when there are multiple clients for redundancy.
 
@@ -74,8 +73,8 @@ async def response(websocket):
         print("Connection closed.")
 
 async def serve():
-    print('Running WebSocket server at ws://localhost:1234')
-    server = await websockets.serve(response, 'localhost', 1234)
+    print('Running WebSocket server at ws://0.0.0.0:6232')
+    server = await websockets.serve(response, '0.0.0.0', 6232)
     await server.wait_closed()
 
 # Main function that runs both the Discord bot and the WebSocket server concurrently
