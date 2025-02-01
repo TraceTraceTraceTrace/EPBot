@@ -8,14 +8,23 @@ from dotenv import load_dotenv
 # Loads the Discord bot token from a .env file
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
-AUTHORID = int(os.getenv('AUTHOR_ID'))
+AUTHORID = int(os.getenv('AUTHORID'))
 
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# what we gotta do is this:
+# WAY TO GET AROUND WSS - go through all important domains like productstation and allow insecure in edge settings
+
+# TO DO
+# add loop to check if connected to websocket to reconnect
+# add loop to do ping/pong stuff
+
+# potentially use realSKU.har.html to generate screenshots of mystation DO THIS LAST
+
+# STUPID ahhhhh ssl certificate i need a domain name and shii. i do this later
+
 # if websocket server receives price and there is active interaction (someone is waiting for price check), edit the interaction message with the price
 # if websocket server receives price but there is no active interaction, ignore. i think this is what will happen when there are multiple clients for redundancy.
 
@@ -25,18 +34,6 @@ tree = app_commands.CommandTree(client)
 # global variables because... i dont feel like typing why, they're important though
 active_websocket = None
 active_interaction = None
-
-@tree.command(
-    name="say"
-)
-@app_commands.describe(message="What do you want me to say?")
-async def say(interaction: discord.Interaction, message: str):
-    #await interaction.response.send_message(message) use below to stay anon. i dont wanna get fired for this please
-    if interaction.user.id == AUTHORID:
-        await interaction.channel.send(message)
-        await interaction.response.send_message("Message sent", ephemeral = True)
-    else:
-        await interaction.response.send_message("You're not sigma enough to use this command. ", ephemeral = True)
 
 @tree.command(
     name="ep",
@@ -57,6 +54,13 @@ async def ep(interaction: discord.Interaction, sku: str):
                 print(f"Sent SKU: {sku} to the WebSocket client.")
             except Exception as error:
                 print(f"Error sending SKU: {error}")
+
+# This relays all messages to the 061 Off the Clock Discord server
+@client.event
+async def on_message(message: discord.Message):
+    if message.author.id == AUTHORID and message.channel.id == 1334861823094161461:
+        lounge: discord.abc.GuildChannel = await client.fetch_channel(1335091169213812919) # REPLACE WITH REAL LOUNGE ID
+        await lounge.send(message.content)
 
 async def response(websocket):
     global active_websocket
