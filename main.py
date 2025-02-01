@@ -15,25 +15,65 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# WAY TO GET AROUND WSS - go through all important domains like productstation and allow insecure in edge settings
+# Store connected WebSocket clients
+connected_clients = []
 
-# TO DO
-# add loop to check if connected to websocket to reconnect
-# add loop to do ping/pong stuff
+# Dictionary to store pending requests
+pending_requests = {}
 
-# potentially use realSKU.har.html to generate screenshots of mystation DO THIS LAST
+# Event to signal when a new client connects
+client_connected_event = asyncio.Event()
 
-# STUPID ahhhhh ssl certificate i need a domain name and shii. i do this later
+async def handle_websocket_message(websocket, response):
+    """Handle incoming WebSocket messages and process them."""
+    print("MESSAGE RECEIVED: " + response)
+    
+    try:
+        sku = response.split()[2]  # Split the response and get the SKU
+        if sku in pending_requests:
+            interaction = pending_requests[sku]
+            await interaction.edit_original_response(content=response)
+            del pending_requests[sku]
+    except Exception as e:
+        print(f"Error processing message: {e}")
+        print(f"Response received: {response}")
 
-# if websocket server receives price and there is active interaction (someone is waiting for price check), edit the interaction message with the price
-# if websocket server receives price but there is no active interaction, ignore. i think this is what will happen when there are multiple clients for redundancy.
+async def wait_for_client(timeout=300):  # 5 minute timeout
+    """Wait for a client to connect."""
+    try:
+        await asyncio.wait_for(client_connected_event.wait(), timeout=timeout)
+        client_connected_event.clear()  # Reset the event for next time
+        return True
+    except asyncio.TimeoutError:
+        return False
 
-# need to store all clients in list or something then interate through list when sending messages to client
-# otherwise, client variable only points to most recently connected client
+async def send_message_to_clients(sku, interaction):
+    """Send a message to clients with waiting and fallback logic."""
+    while True:  # Keep trying until we either succeed or timeout
+        # If no clients are connected, wait for one
+        if not connected_clients:
+            await interaction.edit_original_response(content="Waiting for available client...")
+            if not await wait_for_client():
+                await interaction.edit_original_response(content="Timed out waiting for client connection")
+                return
 
-# global variables because... i dont feel like typing why, they're important though
-active_websocket = None
-active_interaction = None
+        # Store the interaction for later use
+        pending_requests[sku] = interaction
+
+        # Try each client in sequence until one succeeds
+        for websocket in connected_clients:
+            try:
+                await websocket.send(sku)
+                print(f"Successfully sent message to client")
+                return  # Exit after first successful send
+            except websockets.exceptions.ConnectionClosed:
+                print(f"Failed to send to client, removing from list")
+                connected_clients.remove(websocket)
+                continue  # Try next client if available
+        
+        # If we get here and there are still no clients, loop back to waiting
+        if not connected_clients:
+            continue
 
 @tree.command(
     name="ep",
@@ -41,52 +81,55 @@ active_interaction = None
 )
 @app_commands.describe(sku="Enter SKU")
 async def ep(interaction: discord.Interaction, sku: str):
-    global active_interaction
-    active_interaction = interaction
+    # Validate SKU format
     if not (sku.isdigit() and len(sku) == 6):
-        await interaction.response.send_message(f"Please enter a valid SKU")
-    else:
-        await interaction.response.send_message(f"Checking EP for {sku}...")
-        # If the WebSocket is connected, send the valid SKU
-        if active_websocket:
-            try:
-                await active_websocket.send(sku)
-                print(f"Sent SKU: {sku} to the WebSocket client.")
-            except Exception as error:
-                print(f"Error sending SKU: {error}")
+        await interaction.response.send_message("Please enter a valid SKU")
+        return
 
-# This relays all messages to the 061 Off the Clock Discord server
+    # Check if SKU is already in queue
+    if sku in pending_requests:
+        await interaction.response.send_message(f"SKU {sku} is already in queue. Please wait for the result.")
+        return
+
+    await interaction.response.send_message(f"Checking EP for {sku}...")
+    try:
+        await send_message_to_clients(sku, interaction)
+    except Exception as error:
+        print(f"Error sending SKU: {error}")
+        await interaction.edit_original_response(content=f"Error processing request: {error}")
+
 @client.event
 async def on_message(message: discord.Message):
     if message.author.id == AUTHORID and message.channel.id == 1334861823094161461:
-        lounge: discord.abc.GuildChannel = await client.fetch_channel(1335091169213812919) # REPLACE WITH REAL LOUNGE ID
+        lounge = await client.fetch_channel(1335091169213812919)
         await lounge.send(message.content)
 
-async def response(websocket):
-    global active_websocket
-    active_websocket = websocket  # Store the connection globally
+async def handle_client(websocket):
+    """Handle individual WebSocket client connections."""
+    print("WebSocket connected")
+    connected_clients.append(websocket)
+    client_connected_event.set()  # Signal that a client has connected
+    
     try:
-        print("WebSocket connected")
-        while True:
-            message = await websocket.recv() # Receive the message from the client
-            print("MESSAGE RECEIVED: "+message)
-            if active_interaction:
-                await active_interaction.edit_original_response(content=message)
-                
+        async for message in websocket:
+            await handle_websocket_message(websocket, message)
     except websockets.exceptions.ConnectionClosed:
-        print("Connection closed.")
+        print("Connection closed")
+    finally:
+        if websocket in connected_clients:
+            connected_clients.remove(websocket)
 
 async def serve():
     print('Running WebSocket server at ws://0.0.0.0:6232')
-    server = await websockets.serve(response, '0.0.0.0', 6232)
-    await server.wait_closed()
+    async with websockets.serve(handle_client, '0.0.0.0', 6232):
+        await asyncio.Future()  # run forever
 
-# Main function that runs both the Discord bot and the WebSocket server concurrently
 async def main():
-    #websocket_task = asyncio.create_task(serve())  # Start WebSocket server
-    asyncio.create_task(serve())  # Start WebSocket server
-    await client.start(TOKEN)  # Run the Discord bot (this will block until it exits)
+    await asyncio.gather(
+        serve(),
+        client.start(TOKEN)
+    )
 
 if __name__ == "__main__":
-    print(f"Starting Discord Bot and WebSocket Server!")
-    asyncio.run(main())  # Run both the WebSocket server and Discord bot in the same asyncio event loop
+    print("Starting Discord Bot and WebSocket Server!")
+    asyncio.run(main())
