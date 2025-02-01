@@ -39,7 +39,7 @@ async def handle_websocket_message(websocket, response):
         print(f"Error processing message: {e}")
         print(f"Response received: {response}")
 
-async def wait_for_client(timeout=300):  # 5 minute timeout
+async def wait_for_client(timeout=890):  # 15 minute timeout
     """Wait for a client to connect."""
     try:
         await asyncio.wait_for(client_connected_event.wait(), timeout=timeout)
