@@ -34,6 +34,7 @@ async def handle_websocket_message(websocket, response):
             interaction = pending_requests[sku]
             await interaction.edit_original_response(content=response)
             del pending_requests[sku]
+            print(f"Processed response for SKU {sku}. Remaining requests: {list(pending_requests.keys())}")
     except Exception as e:
         print(f"Error processing message: {e}")
         print(f"Response received: {response}")
@@ -49,16 +50,18 @@ async def wait_for_client(timeout=300):  # 5 minute timeout
 
 async def send_message_to_clients(sku, interaction):
     """Send a message to clients with waiting and fallback logic."""
+    # Store the interaction before anything else
+    pending_requests[sku] = interaction
+    print(f"Added SKU {sku} to pending requests. Current requests: {list(pending_requests.keys())}")
+
     while True:  # Keep trying until we either succeed or timeout
         # If no clients are connected, wait for one
         if not connected_clients:
-            await interaction.edit_original_response(content="Waiting for available client...")
+            await interaction.edit_original_response(content=f"Waiting for available client to check {sku}...")
             if not await wait_for_client():
                 await interaction.edit_original_response(content="Timed out waiting for client connection")
+                del pending_requests[sku]  # Only remove from pending if we time out
                 return
-
-        # Store the interaction for later use
-        pending_requests[sku] = interaction
 
         # Try each client in sequence until one succeeds
         for websocket in connected_clients:
@@ -83,12 +86,13 @@ async def send_message_to_clients(sku, interaction):
 async def ep(interaction: discord.Interaction, sku: str):
     # Validate SKU format
     if not (sku.isdigit() and len(sku) == 6):
-        await interaction.response.send_message("Please enter a valid SKU")
+        await interaction.response.send_message("Please enter a valid SKU", ephemeral = True)
         return
 
     # Check if SKU is already in queue
     if sku in pending_requests:
-        await interaction.response.send_message(f"SKU {sku} is already in queue. Please wait for the result.")
+        await interaction.response.send_message(f"SKU {sku} is already in queue. Please wait for the result.", ephemeral = True)
+        print(f"Rejected duplicate request for SKU {sku}. Current requests: {list(pending_requests.keys())}")
         return
 
     await interaction.response.send_message(f"Checking EP for {sku}...")
@@ -97,6 +101,8 @@ async def ep(interaction: discord.Interaction, sku: str):
     except Exception as error:
         print(f"Error sending SKU: {error}")
         await interaction.edit_original_response(content=f"Error processing request: {error}")
+        if sku in pending_requests:
+            del pending_requests[sku]
 
 @client.event
 async def on_message(message: discord.Message):
@@ -118,6 +124,7 @@ async def handle_client(websocket):
     finally:
         if websocket in connected_clients:
             connected_clients.remove(websocket)
+            print(f"Client disconnected. Remaining requests: {list(pending_requests.keys())}")
 
 async def serve():
     print('Running WebSocket server at ws://0.0.0.0:6232')
