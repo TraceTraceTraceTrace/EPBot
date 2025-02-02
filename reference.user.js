@@ -1,16 +1,13 @@
 // ==UserScript==
 // @name         EP
 // @namespace    http://tampermonkey.net/
-// @version      0.9
+// @version      2024-12-13
 // @description  highlight sku and press EP
-// @updateURL    https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/refs/heads/main/EP.user.js
-// @downloadURL  https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/refs/heads/main/EP.user.js
 // @author       You
 // @include      @https://productstation.microcenter.com
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=microcenter.com
 // @grant        GM_xmlhttpRequest
 // ==/UserScript==
-
 
 
 /*
@@ -22,8 +19,6 @@ I did save the HAR file for the response though which i think we can maybe use t
 */
 
 
-
-
 (function() {
     'use strict';
 
@@ -31,7 +26,7 @@ I did save the HAR file for the response though which i think we can maybe use t
     }
     document.addEventListener('keydown', function(event) {
         // Alt + C keybind
-        if (event.altKey && event.key == 'z' && window.getSelection()) {
+        if (event.altKey && event.key == 'c' && window.getSelection()) {
             const selection = window.getSelection().toString()
 
             // if string starts with 6 digits
@@ -78,10 +73,11 @@ I did save the HAR file for the response though which i think we can maybe use t
                     text = text.substring(employeeIndex)
                     let employeePrice = text.substring(0, text.indexOf("<"))
                     employeePrice = employeePrice.substring(employeePrice.indexOf("$") + 1)
-
+                    
                     alert(`Retail Price: ${retailPrice}\nEmployee Price: ${employeePrice}\nDiscount: ${Math.round((1-(employeePrice/retailPrice))*100) || 0}% off`)
                 },
                 onerror: function(error) {
+                    // Handle errors here
                     console.error("Error:", error);
                 },
                 credentials: "include"

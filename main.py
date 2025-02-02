@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 import os
 from dotenv import load_dotenv
+import json
 
 # Loads the Discord bot token from a .env file
 load_dotenv()
@@ -29,15 +30,104 @@ async def handle_websocket_message(websocket, response):
     print("MESSAGE RECEIVED: " + response)
     
     try:
-        sku = response.split()[2]  # Split the response and get the SKU
-        if sku in pending_requests:
-            interaction = pending_requests[sku]
-            await interaction.edit_original_response(content=response)
-            del pending_requests[sku]
-            print(f"Processed response for SKU {sku}. Remaining requests: {list(pending_requests.keys())}")
+        # Parse the JSON response
+        data = json.loads(response)
+        
+        # Check if this is an error response
+        if 'error' in data:
+            error_sku = data.get('SKU')
+            if error_sku in pending_requests:
+                interaction = pending_requests[error_sku]
+                # Don't delete from pending_requests yet - let it try other clients
+                error_message = f"Error checking SKU {error_sku}: {data['error']}"
+                print(error_message)
+                # Remove this client from connected_clients so we can try others
+                if websocket in connected_clients:
+                    connected_clients.remove(websocket)
+                # Try sending to another client
+                await send_message_to_clients(error_sku, interaction)
+            return
+
+        # Normal response processing
+        received_sku = data['SKU']
+        
+        # Check if the received SKU is in our pending requests
+        if received_sku not in pending_requests:
+            print(f"Received response for SKU {received_sku} but it's not in pending requests")
+            print(f"Current pending SKUs: {list(pending_requests.keys())}")
+            return
+            
+        retail_price = float(data['RetailPrice'] or 0)
+        employee_price = float(data['EmployeePrice'] or 0)
+        
+        # Calculate discount percentage only if both prices are valid and retail price is not zero
+        if retail_price > 0 and employee_price >= 0:
+            discount_percentage = ((retail_price - employee_price) / retail_price) * 100
+        else:
+            discount_percentage = 0
+        
+        interaction = pending_requests[received_sku]
+        
+        # If the SKU in the response doesn't match what we're looking for, send error message
+        requested_sku = received_sku  # The SKU we originally requested
+        if 'sku' in data and data['sku'] != requested_sku:
+            error_message = f"Error: Received information for SKU {data['sku']} when requesting SKU {requested_sku}"
+            await interaction.edit_original_response(content=error_message)
+            del pending_requests[received_sku]
+            return
+
+        formatted_message = (
+            f"SKU: {received_sku}\n"
+            f"Item: {data.get('Item', 'N/A')}\n"
+            f"Description: {data.get('Description', 'N/A')}\n"
+            f"UPC: {data.get('UPC', 'N/A')}\n"
+            f"Location: {data.get('Location', 'N/A')}\n"
+            f"Availability: {data.get('Availability', 'N/A')}\n"
+            f"Retail Price: ${retail_price:,.2f}\n"
+            f"Employee Price: ${employee_price:,.2f}\n"
+            f"Discount: {discount_percentage:.1f}%"
+        )
+        await interaction.edit_original_response(content=formatted_message)
+        del pending_requests[received_sku]
+        print(f"Processed response for SKU {received_sku}. Remaining requests: {list(pending_requests.keys())}")
+        
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
+        print(f"Invalid JSON received: {response}")
     except Exception as e:
         print(f"Error processing message: {e}")
         print(f"Response received: {response}")
+
+async def send_message_to_clients(sku, interaction):
+    """Send a message to clients with waiting and fallback logic."""
+    # Store the interaction before anything else
+    pending_requests[sku] = interaction
+    print(f"Added SKU {sku} to pending requests. Current requests: {list(pending_requests.keys())}")
+
+    while True:  # Keep trying until we either succeed or timeout
+        # If no clients are connected, wait for one
+        if not connected_clients:
+            await interaction.edit_original_response(content=f"Waiting for available client to check {sku}...")
+            if not await wait_for_client():
+                await interaction.edit_original_response(content="Timed out waiting for client connection")
+                del pending_requests[sku]  # Only remove from pending if we time out
+                return
+
+        # Try each client in sequence until one succeeds
+        for websocket in connected_clients:
+            try:
+                await websocket.send(sku)
+                print(f"Successfully sent message to client")
+                return  # Exit after first successful send
+            except websockets.exceptions.ConnectionClosed:
+                print(f"Failed to send to client, removing from list")
+                connected_clients.remove(websocket)
+                continue  # Try next client if available
+        
+        # If we get here and there are still no clients, loop back to waiting
+        if not connected_clients:
+            continue
+
 
 async def wait_for_client(timeout=890):  # 15 minute timeout
     """Wait for a client to connect."""
@@ -112,8 +202,8 @@ async def on_message(message: discord.Message):
 
 async def handle_client(websocket):
     """Handle individual WebSocket client connections."""
-    print("WebSocket connected")
     connected_clients.append(websocket)
+    print(f"Client connected. Current connections: {len(connected_clients)}")
     client_connected_event.set()  # Signal that a client has connected
     
     try:
@@ -124,7 +214,7 @@ async def handle_client(websocket):
     finally:
         if websocket in connected_clients:
             connected_clients.remove(websocket)
-            print(f"Client disconnected. Remaining requests: {list(pending_requests.keys())}")
+            print(f"Client disconnected. Current connections: {len(connected_clients)}.")
 
 async def serve():
     print('Running WebSocket server at ws://0.0.0.0:6232')
