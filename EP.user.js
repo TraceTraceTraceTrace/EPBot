@@ -90,6 +90,11 @@
                 },
                 onerror: function(error) {
                     console.error('Request error:', error);
+                    const errorResponse = {
+                        error: "Failed to fetch price information",
+                        SKU: requestedSku
+                    };
+                    websocket.send(JSON.stringify(errorResponse));
                     reject(error);
                 }
             });
@@ -112,10 +117,10 @@
 
         websocket.onmessage = async function(event) {
             console.log('Received SKU request: ' + event.data);
-            
+
             try {
                 const prices = await fetchPrices(event.data);
-                
+
                 const response = {
                     SKU: prices.sku,
                     Item: prices.item,
