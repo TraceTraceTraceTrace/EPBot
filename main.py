@@ -174,6 +174,10 @@ async def send_message_to_clients(sku, interaction):
 )
 @app_commands.describe(sku="Enter SKU")
 async def ep(interaction: discord.Interaction, sku: str):
+    if (interaction.user.id != AUTHORID):
+        await interaction.response.send_message("Sorry still testing", ephemeral = True)
+        return
+
     # Validate SKU format
     if not (sku.isdigit() and len(sku) == 6):
         await interaction.response.send_message("Please enter a valid SKU", ephemeral = True)
@@ -197,7 +201,7 @@ async def ep(interaction: discord.Interaction, sku: str):
 @client.event
 async def on_message(message: discord.Message):
     if message.author.id == AUTHORID and message.channel.id == 1334861823094161461:
-        lounge = await client.fetch_channel(1335091169213812919)
+        lounge = await client.fetch_channel(1183880539648819220)
         await lounge.send(message.content)
 
 async def handle_client(websocket):
