@@ -185,7 +185,7 @@ async def ep(interaction: discord.Interaction, sku: str):
 
     # Check if SKU is already in queue
     if sku in pending_requests:
-        await interaction.response.send_message(f"SKU {sku} is already in queue. Please wait for the result.", ephemeral = True)
+        await interaction.response.send_message(f"SKU {sku} is already in queue. Please wait for a client to connect. ", ephemeral = True)
         print(f"Rejected duplicate request for SKU {sku}. Current requests: {list(pending_requests.keys())}")
         return
 
