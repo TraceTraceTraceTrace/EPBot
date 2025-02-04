@@ -10,6 +10,14 @@
 // @downloadURL  https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/refs/heads/main/EP.user.js
 // ==/UserScript==
 
+
+
+
+// REMEMBER TO INCREASE VERSION NUMBER FOR AUTO UPDATE TO WORK
+
+
+
+
 (function() {
     'use strict';
 
