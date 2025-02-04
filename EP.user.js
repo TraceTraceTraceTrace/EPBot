@@ -109,7 +109,7 @@
             return;
         }
 
-        websocket = new WebSocket('ws://71.185.48.187:6232');
+        websocket = new WebSocket('ws://71.185.48.187:433');
 
         websocket.onopen = function() {
             console.log('Connected to WebSocket server.');
