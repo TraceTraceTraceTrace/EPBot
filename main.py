@@ -179,7 +179,7 @@ async def ep(interaction: discord.Interaction, sku: str):
         return
 
     # Validate SKU format
-    if not (sku.isdigit() and len(sku) == 6):
+    if not (len(sku) == 6 and all(i in '0123456789' for i in sku)):
         await interaction.response.send_message("Please enter a valid SKU", ephemeral = True)
         return
 
