@@ -221,8 +221,8 @@ async def handle_client(websocket):
             print(f"Client disconnected. Current connections: {len(connected_clients)}.")
 
 async def serve():
-    print('Running WebSocket server at ws://0.0.0.0:6232')
-    async with websockets.serve(handle_client, '0.0.0.0', 6232):
+    print('Running WebSocket server at ws://0.0.0.0:443')
+    async with websockets.serve(handle_client, '0.0.0.0', 443):
         await asyncio.Future()  # run forever
 
 async def main():
