@@ -5,11 +5,20 @@ from discord import app_commands
 import os
 from dotenv import load_dotenv
 import json
+import ssl
+import pathlib
 
 # Loads the Discord bot token from a .env file
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
 AUTHORID = int(os.getenv('AUTHORID'))
+
+# SSL Configuration
+ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ssl_context.load_cert_chain(
+    pathlib.Path(r"C:\Users\Trace\Documents\VENVS\EPBot\domain.cert.pem"),
+    keyfile=pathlib.Path(r"C:\Users\Trace\Documents\VENVS\EPBot\private.key.pem")
+)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -128,7 +137,6 @@ async def send_message_to_clients(sku, interaction):
         if not connected_clients:
             continue
 
-
 async def wait_for_client(timeout=890):  # 15 minute timeout
     """Wait for a client to connect."""
     try:
@@ -137,36 +145,6 @@ async def wait_for_client(timeout=890):  # 15 minute timeout
         return True
     except asyncio.TimeoutError:
         return False
-
-async def send_message_to_clients(sku, interaction):
-    """Send a message to clients with waiting and fallback logic."""
-    # Store the interaction before anything else
-    pending_requests[sku] = interaction
-    print(f"Added SKU {sku} to pending requests. Current requests: {list(pending_requests.keys())}")
-
-    while True:  # Keep trying until we either succeed or timeout
-        # If no clients are connected, wait for one
-        if not connected_clients:
-            await interaction.edit_original_response(content=f"Waiting for available client to check {sku}...")
-            if not await wait_for_client():
-                await interaction.edit_original_response(content="Timed out waiting for client connection")
-                del pending_requests[sku]  # Only remove from pending if we time out
-                return
-
-        # Try each client in sequence until one succeeds
-        for websocket in connected_clients:
-            try:
-                await websocket.send(sku)
-                print(f"Successfully sent message to client")
-                return  # Exit after first successful send
-            except websockets.exceptions.ConnectionClosed:
-                print(f"Failed to send to client, removing from list")
-                connected_clients.remove(websocket)
-                continue  # Try next client if available
-        
-        # If we get here and there are still no clients, loop back to waiting
-        if not connected_clients:
-            continue
 
 @tree.command(
     name="ep",
@@ -221,16 +199,22 @@ async def handle_client(websocket):
             print(f"Client disconnected. Current connections: {len(connected_clients)}.")
 
 async def serve():
-    print('Running WebSocket server at ws://0.0.0.0:443')
-    async with websockets.serve(handle_client, '0.0.0.0', 443):
+    print('Running WSS server on 0.0.0.0:443')
+    async with websockets.serve(handle_client, '0.0.0.0', 443, ssl=ssl_context, origins=None):
         await asyncio.Future()  # run forever
 
 async def main():
-    await asyncio.gather(
-        serve(),
-        client.start(TOKEN)
-    )
+    try:
+        await asyncio.gather(
+            serve(),
+            client.start(TOKEN)
+        )
+    except Exception as e:
+        print(f"Error details: {str(e)}")
+        import traceback
+        print("Full traceback:")
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    print("Starting Discord Bot and WebSocket Server!")
+    print("Starting Discord Bot and WSS Server!")
     asyncio.run(main())

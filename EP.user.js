@@ -6,6 +6,8 @@
 // @author       You
 // @match        file:///C:/Users/Trace/Documents/Code/commissionCalculator/reference.html
 // @grant        GM.xmlHttpRequest
+// @grant        GM.webSocket
+// @connect      justgrapemebro.com
 // ==/UserScript==
 
 (function() {
@@ -109,7 +111,7 @@
             return;
         }
 
-        websocket = new WebSocket('ws://71.185.48.187:443');
+        websocket = new WebSocket('wss://justgrapemebro.com');
 
         websocket.onopen = function() {
             console.log('Connected to WebSocket server.');
