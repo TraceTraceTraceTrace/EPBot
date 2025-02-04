@@ -4,10 +4,8 @@
 // @version      0.2
 // @description  Automatically connect to WebSocket and fetch real prices
 // @author       You
-// @match        file:///C:/Users/Trace/Documents/Code/commissionCalculator/reference.html
+// @match        https://www.reddit.com/*
 // @grant        GM.xmlHttpRequest
-// @grant        GM.webSocket
-// @connect      justgrapemebro.com
 // ==/UserScript==
 
 (function() {
