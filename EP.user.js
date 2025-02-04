@@ -6,6 +6,8 @@
 // @author       You
 // @match        https://www.reddit.com/*
 // @grant        GM.xmlHttpRequest
+// @updateURL    https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/refs/heads/main/EP.user.js
+// @downloadURL  https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/refs/heads/main/EP.user.js
 // ==/UserScript==
 
 (function() {
