@@ -1,14 +1,15 @@
 // ==UserScript==
 // @name         Auto WebSocket Connect with Price Fetching
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.5
 // @description  Automatically connect to WebSocket and fetch real prices
 // @author       You
-// @match        https://www.reddit.com/*
+// @match        *://*/*
 // @grant        GM.xmlHttpRequest
 // @updateURL    https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/refs/heads/main/EP.user.js
 // @downloadURL  https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/refs/heads/main/EP.user.js
 // ==/UserScript==
+
 
 
 
@@ -18,11 +19,16 @@
 
 
 
+
 (function() {
     'use strict';
 
     let websocket = null;
+    let isConnecting = false;
+    let reconnectTimeout = null;
     const reconnectDelay = 5000; // Delay before reconnecting in ms
+    const maxReconnectAttempts = 5;
+    let reconnectAttempts = 0;
 
     // Function to parse price string to number
     function parsePrice(priceStr) {
@@ -36,7 +42,6 @@
             const strong = p.querySelector('strong');
             if (strong && strong.textContent.includes(text)) {
                 if (text === 'Employee Price:') {
-                    // Special handling for employee price which might be in a different format
                     const priceMatch = p.textContent.match(/\$[\d,]+\.?\d*/);
                     return priceMatch ? priceMatch[0] : '';
                 }
@@ -62,13 +67,11 @@
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(response.responseText, 'text/html');
 
-                        // Find the product-info div
                         const productInfo = doc.querySelector('.product-info.mb-4');
                         if (!productInfo) {
                             throw new Error('Product info section not found');
                         }
 
-                        // Extract all information
                         const info = {
                             sku: findParagraphByStrongText(productInfo, 'Sku:'),
                             item: findParagraphByStrongText(productInfo, 'Item:'),
@@ -80,7 +83,6 @@
                             employeePrice: findParagraphByStrongText(productInfo, 'Employee Price:')
                         };
 
-                        // Parse numeric values
                         const result = {
                             sku: info.sku,
                             item: info.item,
@@ -100,71 +102,133 @@
                 },
                 onerror: function(error) {
                     console.error('Request error:', error);
-                    const errorResponse = {
-                        error: "Failed to fetch price information",
-                        SKU: requestedSku
-                    };
-                    websocket.send(JSON.stringify(errorResponse));
                     reject(error);
                 }
             });
         });
     }
 
+    // Function to clean up existing WebSocket connection
+    function cleanupWebSocket() {
+        if (websocket) {
+            // Remove all event listeners to prevent memory leaks
+            websocket.onopen = null;
+            websocket.onclose = null;
+            websocket.onerror = null;
+            websocket.onmessage = null;
+
+            // Close the connection if it's still open
+            if (websocket.readyState === WebSocket.OPEN ||
+                websocket.readyState === WebSocket.CONNECTING) {
+                websocket.close();
+            }
+            websocket = null;
+        }
+
+        // Clear any pending reconnect timeout
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
+        }
+    }
+
     // Function to handle WebSocket connection
     function connectWebSocket() {
+        // Prevent multiple simultaneous connection attempts
+        if (isConnecting) {
+            console.log('Connection attempt already in progress');
+            return;
+        }
+
         // Check if we're already connected
         if (websocket && websocket.readyState === WebSocket.OPEN) {
             console.log('Already connected to WebSocket server.');
             return;
         }
 
-        websocket = new WebSocket('wss://justgrapemebro.com');
+        isConnecting = true;
 
-        websocket.onopen = function() {
-            console.log('Connected to WebSocket server.');
-        };
+        // Clean up any existing connection
+        cleanupWebSocket();
 
-        websocket.onmessage = async function(event) {
-            console.log('Received SKU request: ' + event.data);
-
-            try {
-                const prices = await fetchPrices(event.data);
-
-                const response = {
-                    SKU: prices.sku,
-                    Item: prices.item,
-                    Description: prices.description,
-                    UPC: prices.upc,
-                    Availability: prices.availability,
-                    Location: prices.location,
-                    RetailPrice: prices.retailPrice,
-                    EmployeePrice: prices.employeePrice
-                };
-
-                websocket.send(JSON.stringify(response));
-                console.log("Sent price information:", response);
-            } catch (error) {
-                console.error("Error processing request:", error);
-                const errorResponse = {
-                    SKU: event.data,
-                    error: error.message
-                };
-                websocket.send(JSON.stringify(errorResponse));
+        const wsOptions = {
+            headers: {
+                'Connection': 'Upgrade',
+                'Upgrade': 'websocket',
+                'Sec-WebSocket-Version': '13',
+                'Sec-WebSocket-Extensions': 'permessage-deflate',
             }
         };
 
-        websocket.onerror = function(error) {
-            console.error('WebSocket error: ', error);
-        };
+        try {
+            websocket = new WebSocket('wss://justgrapemebro.com', [], wsOptions);
 
-        websocket.onclose = function() {
-            console.log('WebSocket connection closed.');
-            websocket = null;
-            // Attempt to reconnect after a delay
-            console.log(`Attempting to reconnect in ${reconnectDelay / 1000} seconds...`);
-            setTimeout(connectWebSocket, reconnectDelay);
-        };
+            websocket.onopen = function() {
+                console.log('Connected to WebSocket server.');
+                isConnecting = false;
+                reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+            };
+
+            websocket.onmessage = async function(event) {
+                console.log('Received SKU request: ' + event.data);
+
+                try {
+                    const prices = await fetchPrices(event.data);
+                    const response = {
+                        SKU: prices.sku,
+                        Item: prices.item,
+                        Description: prices.description,
+                        UPC: prices.upc,
+                        Availability: prices.availability,
+                        Location: prices.location,
+                        RetailPrice: prices.retailPrice,
+                        EmployeePrice: prices.employeePrice
+                    };
+
+                    if (websocket && websocket.readyState === WebSocket.OPEN) {
+                        websocket.send(JSON.stringify(response));
+                        console.log("Sent price information:", response);
+                    }
+                } catch (error) {
+                    console.error("Error processing request:", error);
+                    if (websocket && websocket.readyState === WebSocket.OPEN) {
+                        const errorResponse = {
+                            SKU: event.data,
+                            error: error.message || 'Failed to fetch price information'
+                        };
+                        websocket.send(JSON.stringify(errorResponse));
+                    }
+                }
+            };
+
+            websocket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                isConnecting = false;
+            };
+
+            websocket.onclose = function(event) {
+                console.log('WebSocket connection closed:', event.code, event.reason);
+                isConnecting = false;
+
+                // Only attempt to reconnect if we haven't exceeded max attempts
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in ${reconnectDelay/1000} seconds...`);
+                    reconnectTimeout = setTimeout(connectWebSocket, reconnectDelay);
+                } else {
+                    console.log('Max reconnection attempts reached. Please refresh the page to try again.');
+                }
+            };
+
+        } catch (error) {
+            console.error('Error creating WebSocket:', error);
+            isConnecting = false;
+
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                reconnectTimeout = setTimeout(connectWebSocket, reconnectDelay);
+            }
+        }
     }
 
     // Initialize connection when the script loads

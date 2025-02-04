@@ -78,10 +78,19 @@ async def handle_websocket_message(websocket, response):
         
         if 'error' in data:
             await handle_error_response(websocket, data)
-            return
-        else:
+            return  # Exit early for error cases
+            
+        # Only process successful responses
+        if all(key in data for key in ['SKU', 'Item', 'RetailPrice', 'EmployeePrice']):
             await handle_success_response(data)
-        
+        else:
+            print(f"Incomplete data received: {data}")
+            if 'SKU' in data:
+                await handle_error_response(websocket, {
+                    'SKU': data['SKU'],
+                    'error': 'Incomplete data received'
+                })
+                
     except json.JSONDecodeError as e:
         print(f"Error decoding JSON: {e}")
         print(f"Invalid JSON received: {response}")
@@ -93,6 +102,7 @@ async def handle_error_response(websocket, data):
     """
     Handle error responses from WebSocket clients.
     Removes failed client and attempts to retry with other clients.
+    If all retries fail, sends error message to Discord.
     """
     error_sku = data.get('SKU')
     if error_sku in pending_requests:
@@ -100,10 +110,17 @@ async def handle_error_response(websocket, data):
         error_message = f"Error checking SKU {error_sku}: {data['error']}"
         print(error_message)
         
-        # Remove failed client and try others
+        # Remove failed client
         if websocket in connected_clients:
             connected_clients.remove(websocket)
-        await send_message_to_clients(error_sku, interaction)
+            
+        # If there are other clients available, try them
+        if connected_clients:
+            await send_message_to_clients(error_sku, interaction)
+        else:
+            # If no more clients available, inform user and clean up
+            await interaction.edit_original_response(content=error_message)
+            del pending_requests[error_sku]
 
 async def handle_success_response(data):
     """Process successful SKU lookup responses and format Discord messages."""
@@ -188,10 +205,14 @@ async def send_message_to_clients(sku, interaction):
     Distribute SKU lookup requests to connected clients with retry logic.
     Continues trying until a client successfully processes the request or times out.
     """
-    pending_requests[sku] = interaction
-    print(f"Added SKU {sku} to pending requests. Current requests: {list(pending_requests.keys())}")
+    if sku not in pending_requests:  # Only add if not already pending
+        pending_requests[sku] = interaction
+        print(f"Added SKU {sku} to pending requests. Current requests: {list(pending_requests.keys())}")
 
-    while True:  # Keep trying until success or timeout
+    retry_count = 0
+    max_retries = 3  # Limit the number of retries
+    
+    while retry_count < max_retries:
         if not connected_clients:
             await interaction.edit_original_response(content=f"Waiting for available client to check {sku}...")
             if not await wait_for_client():
@@ -200,18 +221,25 @@ async def send_message_to_clients(sku, interaction):
                 return
 
         # Try each available client
-        for websocket in connected_clients:
+        for websocket in list(connected_clients):  # Create a copy of the list to avoid modification during iteration
             try:
                 await websocket.send(sku)
                 print(f"Successfully sent message to client")
                 return
             except websockets.exceptions.ConnectionClosed:
                 print(f"Failed to send to client, removing from list")
-                connected_clients.remove(websocket)
+                if websocket in connected_clients:
+                    connected_clients.remove(websocket)
                 continue
         
-        if not connected_clients:
-            continue
+        retry_count += 1
+        if retry_count < max_retries:
+            await asyncio.sleep(1)  # Wait before retrying
+    
+    # If we've exhausted all retries
+    await interaction.edit_original_response(content=f"Failed to process SKU {sku} after multiple attempts")
+    if sku in pending_requests:
+        del pending_requests[sku]
 
 async def wait_for_client(timeout=890):
     """
@@ -276,8 +304,18 @@ async def on_message(message: discord.Message):
 async def serve():
     """Initialize and run the WebSocket server."""
     print('Running WSS server on 0.0.0.0:443')
-    async with websockets.serve(handle_client, '0.0.0.0', 443, ssl=ssl_context, origins=None):
-        await asyncio.Future()  # run forever
+    
+    # Create server with basic settings
+    server = await websockets.serve(
+        handle_client,  # Use the existing handle_client function directly
+        '0.0.0.0',
+        443,
+        ssl=ssl_context,
+        origins=None,
+        close_timeout=10  # Wait 10 seconds for close handshake
+    )
+    
+    await asyncio.Future()  # run forever
 
 async def main():
     """Main application entry point."""
