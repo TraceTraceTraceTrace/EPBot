@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Auto WebSocket Connect with Price Fetching
 // @namespace    http://tampermonkey.net/
-// @version      0.5
+// @version      0.6
 // @description  Automatically connect to WebSocket and fetch real prices
 // @author       You
-// @match        *://*/*
+// @match        https://productstation.microcenter.com/*
 // @grant        GM.xmlHttpRequest
 // @updateURL    https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/refs/heads/main/EP.user.js
 // @downloadURL  https://raw.githubusercontent.com/TraceTraceTraceTrace/EPBot/refs/heads/main/EP.user.js
@@ -26,7 +26,9 @@
     let websocket = null;
     let isConnecting = false;
     let reconnectTimeout = null;
-    const reconnectDelay = 5000; // Delay before reconnecting in ms
+    let resetAttemptsTimeout = null;
+    const reconnectDelay = 5000; // 5 seconds between reconnect attempts
+    const resetDelay = 300000;   // 5 minutes to reset reconnect attempts
     const maxReconnectAttempts = 5;
     let reconnectAttempts = 0;
 
@@ -96,28 +98,34 @@
 
                         resolve(result);
                     } catch (error) {
-                        console.error('Error parsing response:', error);
+                        //console.error('Error parsing response:', error);
                         reject(error);
                     }
                 },
                 onerror: function(error) {
-                    console.error('Request error:', error);
+                    //console.error('Request error:', error);
                     reject(error);
                 }
             });
         });
     }
 
+    // Function to reset reconnect attempts counter
+    function resetReconnectAttempts() {
+        reconnectAttempts = 0;
+        //console.log('Reconnection attempts counter has been reset');
+        // Try to connect immediately after reset
+        connectWebSocket();
+    }
+
     // Function to clean up existing WebSocket connection
     function cleanupWebSocket() {
         if (websocket) {
-            // Remove all event listeners to prevent memory leaks
             websocket.onopen = null;
             websocket.onclose = null;
             websocket.onerror = null;
             websocket.onmessage = null;
 
-            // Close the connection if it's still open
             if (websocket.readyState === WebSocket.OPEN ||
                 websocket.readyState === WebSocket.CONNECTING) {
                 websocket.close();
@@ -125,30 +133,30 @@
             websocket = null;
         }
 
-        // Clear any pending reconnect timeout
+        // Clear any pending timeouts
         if (reconnectTimeout) {
             clearTimeout(reconnectTimeout);
             reconnectTimeout = null;
+        }
+        if (resetAttemptsTimeout) {
+            clearTimeout(resetAttemptsTimeout);
+            resetAttemptsTimeout = null;
         }
     }
 
     // Function to handle WebSocket connection
     function connectWebSocket() {
-        // Prevent multiple simultaneous connection attempts
         if (isConnecting) {
-            console.log('Connection attempt already in progress');
+            //console.log('Connection attempt already in progress');
             return;
         }
 
-        // Check if we're already connected
         if (websocket && websocket.readyState === WebSocket.OPEN) {
-            console.log('Already connected to WebSocket server.');
+            //console.log('Already connected to WebSocket server.');
             return;
         }
 
         isConnecting = true;
-
-        // Clean up any existing connection
         cleanupWebSocket();
 
         const wsOptions = {
@@ -164,13 +172,19 @@
             websocket = new WebSocket('wss://justgrapemebro.com', [], wsOptions);
 
             websocket.onopen = function() {
-                console.log('Connected to WebSocket server.');
+                //console.log('Connected to WebSocket server.');
                 isConnecting = false;
-                reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+                reconnectAttempts = 0; // Reset on successful connection
+
+                // Clear any pending reset timeout on successful connection
+                if (resetAttemptsTimeout) {
+                    clearTimeout(resetAttemptsTimeout);
+                    resetAttemptsTimeout = null;
+                }
             };
 
             websocket.onmessage = async function(event) {
-                console.log('Received SKU request: ' + event.data);
+                //console.log('Received SKU request: ' + event.data);
 
                 try {
                     const prices = await fetchPrices(event.data);
@@ -187,10 +201,10 @@
 
                     if (websocket && websocket.readyState === WebSocket.OPEN) {
                         websocket.send(JSON.stringify(response));
-                        console.log("Sent price information:", response);
+                        //console.log("Sent price information:", response);
                     }
                 } catch (error) {
-                    console.error("Error processing request:", error);
+                    //console.error("Error processing request:", error);
                     if (websocket && websocket.readyState === WebSocket.OPEN) {
                         const errorResponse = {
                             SKU: event.data,
@@ -202,36 +216,40 @@
             };
 
             websocket.onerror = function(error) {
-                console.error('WebSocket error:', error);
+                //console.error('WebSocket error:', error);
                 isConnecting = false;
             };
 
             websocket.onclose = function(event) {
-                console.log('WebSocket connection closed:', event.code, event.reason);
+                //console.log('WebSocket connection closed:', event.code, event.reason);
                 isConnecting = false;
 
-                // Only attempt to reconnect if we haven't exceeded max attempts
                 if (reconnectAttempts < maxReconnectAttempts) {
                     reconnectAttempts++;
-                    console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in ${reconnectDelay/1000} seconds...`);
+                    //console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts}) in ${reconnectDelay/1000} seconds...`);
                     reconnectTimeout = setTimeout(connectWebSocket, reconnectDelay);
                 } else {
-                    console.log('Max reconnection attempts reached. Please refresh the page to try again.');
+                    //console.log(`Max reconnection attempts reached. Will try again in ${resetDelay/1000/60} minutes.`);
+                    // Set timeout to reset attempts and try again
+                    resetAttemptsTimeout = setTimeout(resetReconnectAttempts, resetDelay);
                 }
             };
 
         } catch (error) {
-            console.error('Error creating WebSocket:', error);
+            //console.error('Error creating WebSocket:', error);
             isConnecting = false;
 
             if (reconnectAttempts < maxReconnectAttempts) {
                 reconnectAttempts++;
                 reconnectTimeout = setTimeout(connectWebSocket, reconnectDelay);
+            } else {
+                //console.log(`Max reconnection attempts reached. Will try again in ${resetDelay/1000/60} minutes.`);
+                resetAttemptsTimeout = setTimeout(resetReconnectAttempts, resetDelay);
             }
         }
     }
 
     // Initialize connection when the script loads
-    console.log('Initializing WebSocket connection...');
+    //console.log('Initializing WebSocket connection...');
     connectWebSocket();
 })();

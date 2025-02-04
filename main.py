@@ -44,9 +44,10 @@ client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
 # Global state management
-connected_clients = []  # Active WebSocket connections
-pending_requests = {}   # SKU requests awaiting responses
-client_connected_event = asyncio.Event()  # Signals when a client connects
+connected_clients = []   # Active WebSocket connections
+pending_requests = {}    # SKU requests awaiting responses
+failed_sku_attempts = {} # Format: {sku: set(websocket_objects)}
+client_connected_event = asyncio.Event() # Signals when a client connects
 
 # WebSocket Message Handling
 
@@ -101,8 +102,7 @@ async def handle_websocket_message(websocket, response):
 async def handle_error_response(websocket, data):
     """
     Handle error responses from WebSocket clients.
-    Removes failed client and attempts to retry with other clients.
-    If all retries fail, sends error message to Discord.
+    Tracks failed attempts per SKU while maintaining connections.
     """
     error_sku = data.get('SKU')
     if error_sku in pending_requests:
@@ -110,17 +110,22 @@ async def handle_error_response(websocket, data):
         error_message = f"Error checking SKU {error_sku}: {data['error']}"
         print(error_message)
         
-        # Remove failed client
-        if websocket in connected_clients:
-            connected_clients.remove(websocket)
-            
-        # If there are other clients available, try them
-        if connected_clients:
+        # Track this failed attempt
+        if error_sku not in failed_sku_attempts:
+            failed_sku_attempts[error_sku] = set()
+        failed_sku_attempts[error_sku].add(websocket)
+        
+        # Try with remaining clients that haven't failed for this SKU
+        available_clients = [client for client in connected_clients 
+                           if client not in failed_sku_attempts.get(error_sku, set())]
+        
+        if available_clients:
             await send_message_to_clients(error_sku, interaction)
         else:
-            # If no more clients available, inform user and clean up
+            # If no more available clients for this SKU, inform user and clean up
             await interaction.edit_original_response(content=error_message)
             del pending_requests[error_sku]
+            del failed_sku_attempts[error_sku]  # Clean up tracking for this SKU
 
 async def handle_success_response(data):
     """Process successful SKU lookup responses and format Discord messages."""
@@ -202,26 +207,38 @@ async def handle_client(websocket):
 
 async def send_message_to_clients(sku, interaction):
     """
-    Distribute SKU lookup requests to connected clients with retry logic.
-    Continues trying until a client successfully processes the request or times out.
+    Modified to skip clients that have already failed for this SKU.
     """
-    if sku not in pending_requests:  # Only add if not already pending
+    if sku not in pending_requests:
         pending_requests[sku] = interaction
         print(f"Added SKU {sku} to pending requests. Current requests: {list(pending_requests.keys())}")
 
     retry_count = 0
-    max_retries = 3  # Limit the number of retries
-    
+    max_retries = 3
+
     while retry_count < max_retries:
         if not connected_clients:
             await interaction.edit_original_response(content=f"Waiting for available client to check {sku}...")
             if not await wait_for_client():
                 await interaction.edit_original_response(content="Timed out waiting for client connection")
                 del pending_requests[sku]
+                if sku in failed_sku_attempts:
+                    del failed_sku_attempts[sku]
                 return
 
+        # Filter out clients that have already failed for this SKU
+        available_clients = [client for client in connected_clients 
+                           if client not in failed_sku_attempts.get(sku, set())]
+
+        if not available_clients:
+            await interaction.edit_original_response(content=f"No available clients to process SKU {sku}")
+            del pending_requests[sku]
+            if sku in failed_sku_attempts:
+                del failed_sku_attempts[sku]
+            return
+
         # Try each available client
-        for websocket in list(connected_clients):  # Create a copy of the list to avoid modification during iteration
+        for websocket in available_clients:
             try:
                 await websocket.send(sku)
                 print(f"Successfully sent message to client")
@@ -234,12 +251,14 @@ async def send_message_to_clients(sku, interaction):
         
         retry_count += 1
         if retry_count < max_retries:
-            await asyncio.sleep(1)  # Wait before retrying
-    
+            await asyncio.sleep(1)
+
     # If we've exhausted all retries
     await interaction.edit_original_response(content=f"Failed to process SKU {sku} after multiple attempts")
     if sku in pending_requests:
         del pending_requests[sku]
+    if sku in failed_sku_attempts:
+        del failed_sku_attempts[sku]
 
 async def wait_for_client(timeout=890):
     """
