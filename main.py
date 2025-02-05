@@ -173,15 +173,15 @@ def format_response_message(data):
         discount_percentage = ((retail_price - employee_price) / retail_price) * 100
 
     return (
-        f"SKU: {data['SKU']}\n"
-        f"Item: {data.get('Item', 'N/A')}\n"
-        f"Description: {data.get('Description', 'N/A')}\n"
-        f"UPC: {data.get('UPC', 'N/A')}\n"
-        f"Location: {data.get('Location', 'N/A')}\n"
-        f"Availability: {data.get('Availability', 'N/A')}\n"
-        f"Retail Price: ${retail_price:,.2f}\n"
-        f"Employee Price: ${employee_price:,.2f}\n"
-        f"Discount: {discount_percentage:.1f}%"
+        f"**SKU:** {data['SKU']}\n"
+        f"**Item:** {data.get('Item', 'N/A')}\n"
+        #f"**Description:** {data.get('Description', 'N/A')}\n"
+        #f"**UPC:** {data.get('UPC', 'N/A')}\n"
+        #f"**Location:** {data.get('Location', 'N/A')}\n"
+        #f"**Availability:** {data.get('Availability', 'N/A')}\n"
+        f"**Retail Price:** ${retail_price:,.2f}\n"
+        f"**Employee Price:** ${employee_price:,.2f}\n"
+        f"**Discount:** {discount_percentage:.1f}%"
     )
 
 # WebSocket Client Management
@@ -331,7 +331,8 @@ async def serve():
         443,
         ssl=ssl_context,
         origins=None,
-        close_timeout=10  # Wait 10 seconds for close handshake
+        close_timeout=10,  # Wait 10 seconds for close handshake
+        process_request=None
     )
     
     await asyncio.Future()  # run forever

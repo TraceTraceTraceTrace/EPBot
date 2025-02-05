@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto WebSocket Connect with Price Fetching
 // @namespace    http://tampermonkey.net/
-// @version      0.6
+// @version      0.7
 // @description  Automatically connect to WebSocket and fetch real prices
 // @author       You
 // @match        https://productstation.microcenter.com/*
@@ -159,17 +159,8 @@
         isConnecting = true;
         cleanupWebSocket();
 
-        const wsOptions = {
-            headers: {
-                'Connection': 'Upgrade',
-                'Upgrade': 'websocket',
-                'Sec-WebSocket-Version': '13',
-                'Sec-WebSocket-Extensions': 'permessage-deflate',
-            }
-        };
-
         try {
-            websocket = new WebSocket('wss://justgrapemebro.com', [], wsOptions);
+            websocket = new WebSocket('wss://justgrapemebro.com');
 
             websocket.onopen = function() {
                 //console.log('Connected to WebSocket server.');
