@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto WebSocket Connect with Price Fetching
 // @namespace    http://tampermonkey.net/
-// @version      0.8
+// @version      0.9
 // @description  Automatically connect to WebSocket and fetch real prices
 // @author       You
 // @match        https://productstation.microcenter.com/*
@@ -71,7 +71,7 @@
 
                         const productInfo = doc.querySelector('.product-info.mb-4');
                         if (!productInfo) {
-                            throw new Error('Product info section not found');
+                            throw new Error('invalid SKU');
                         }
 
                         const info = {

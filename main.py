@@ -117,7 +117,7 @@ async def handle_error_response(websocket, data):
         
         # Try with remaining clients that haven't failed for this SKU
         available_clients = [client for client in connected_clients 
-                           if client not in failed_sku_attempts.get(error_sku, set())]
+            if client not in failed_sku_attempts.get(error_sku, set())]
         
         if available_clients:
             await send_message_to_clients(error_sku, interaction)
