@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto WebSocket Connect with Price Fetching
 // @namespace    http://tampermonkey.net/
-// @version      0.7
+// @version      0.8
 // @description  Automatically connect to WebSocket and fetch real prices
 // @author       You
 // @match        https://productstation.microcenter.com/*
