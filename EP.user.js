@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Auto WebSocket Connect with Price Fetching
 // @namespace    http://tampermonkey.net/
-// @version      0.9
+// @version      0.10
 // @description  Automatically connect to WebSocket and fetch real prices
 // @author       You
 // @match        https://productstation.microcenter.com/*
@@ -153,7 +153,6 @@
 
         if (websocket && websocket.readyState === WebSocket.OPEN) {
             //console.log('Already connected to WebSocket server.');
-            websocket.send(`Version: ${GM_info.script.version}`);
             return;
         }
 
@@ -164,6 +163,7 @@
             websocket = new WebSocket('wss://justgrapemebro.com');
 
             websocket.onopen = function() {
+                websocket.send(`Version: ${GM_info.script.version}`);
                 //console.log('Connected to WebSocket server.');
                 isConnecting = false;
                 reconnectAttempts = 0; // Reset on successful connection
