@@ -153,6 +153,7 @@
 
         if (websocket && websocket.readyState === WebSocket.OPEN) {
             //console.log('Already connected to WebSocket server.');
+            websocket.send(`Version: ${GM_info.script.version}`);
             return;
         }
 
